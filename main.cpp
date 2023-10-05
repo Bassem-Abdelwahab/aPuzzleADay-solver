@@ -2,21 +2,36 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <map>
 #include <stack>
 #include <algorithm> 
 #include <time.h>
 #include <stdlib.h>
 
-#define CAL_SIZE 59
+#include "solutions_DB.h"
 
-std::string decodedDate[CAL_SIZE] = {"Jan","Feb","Mar","Apr","May","Jun", " ","\n",
-                                     "Jul","Aug","Sep","Oct","Nov","Dec", " ","\n",
+#define CAL_SIZE 59
+#define NUM_PCS 9
+#define CAL_ROW 8
+#define CAL_COL 7
+#define TOTAL_ELEMENTS 50
+#define POSSIBILITIES TOTAL_ELEMENTS*(TOTAL_ELEMENTS-1)*(TOTAL_ELEMENTS-2)
+static const std::string boardConfig[CAL_ROW]={ "...... ",
+                                                "...... ",
+                                                ".......",
+                                                ".......",
+                                                ".......",
+                                                ".......",
+                                                ".......",
+                                                "...    "};
+std::string decodedDate[CAL_SIZE] = {"Jan","Feb","Mar","Apr","May","Jun","   ","\n",
+                                     "Jul","Aug","Sep","Oct","Nov","Dec","   ","\n",
                                      "Sun","Mon","Tue","Wed","Thu","Fri","Sat","\n",
-                                      "01", "02", "03", "04", "05", "06","07","\n",
-                                      "08", "09", "10", "11", "12", "13","14","\n",
-                                      "15", "16", "17", "18", "19", "20","21","\n",
-                                      "22", "23", "24", "25", "26", "27","28","\n",
-                                      "29", "30", "31"};
+                                     " 01"," 02"," 03"," 04"," 05"," 06"," 07","\n",
+                                     " 08"," 09"," 10"," 11"," 12"," 13"," 14","\n",
+                                     " 15"," 16"," 17"," 18"," 19"," 20"," 21","\n",
+                                     " 22"," 23"," 24"," 25"," 26"," 27"," 28","\n",
+                                     " 29"," 30"," 31"};
 #define MAX_LOCATION 45
 #define DEBUG   0
 enum orientation_t {NOR_0=0 , NOR_90=1 , NOR_180=2 , NOR_270=3 , 
@@ -50,6 +65,7 @@ class puzzle_piece
     void set_shapeSymmetry(symmetry_t shapeSymmetry);
     bool get_next_orientation();
     bool get_next_coord(coord &outCoord);
+    unsigned int get_cells_number();
     void set_currentOrientation(unsigned int index);
     unsigned int get_currentOrientation();
     coord get_dimensions();
@@ -60,22 +76,16 @@ class puzzle_piece
 std::string decode_date(std::string boardRep)
 {
     std::string date = "";
-    unsigned int loc=0;
-    loc = boardRep.rfind('.');
-    if(loc != std::string::npos)
+    unsigned int loc=boardRep.length();
+    while(loc != std::string::npos)
     {
-        date+=decodedDate[loc]+"-";
-        loc = boardRep.rfind('.',loc-1);
+        loc = boardRep.rfind('.',loc);
         if(loc != std::string::npos)
         {
-            date+=decodedDate[loc];
-            loc = boardRep.rfind('.',loc-1);
-            if(loc != std::string::npos)
-            {
-                date+=decodedDate[loc];
-            }
+            date+=decodedDate[loc]+"-";
         }
     }
+    date.erase(date.length()-1,1);
     return date;
 }
 
@@ -105,12 +115,13 @@ unsigned int date_to_index(std::string input)
 class puzzle_board
 {
     private:
-    std::string m_board[7];
+    std::string m_board[CAL_ROW];
     public:
     puzzle_board();
     bool try_to_fit(puzzle_piece pieceToFit , coord pieceLocation);
     void remove_shape(puzzle_piece pieceToRem , coord pieceLocation);
     void reset_board();
+    void board_to_array(std::string outBoard[]);
     std::string board_to_string();
 };
 
@@ -123,19 +134,24 @@ struct backtrack
     puzzle_piece piece;
 };
 
+bool is_branch_viable( puzzle_board currentState , backtrack piecesArr[] , unsigned int indexPiece );
+
+
 #define MAX_TIME 30*60*CLOCKS_PER_SEC
 
 int main (int argc, char * argv[])
 {
     using namespace std;
-    unsigned int argsin[17] = {1,26,3,0,3,4,3,28,
-                               4,22,7,17,2,9,0,0,6};
-    string days[12*31+1];
+    unsigned int argsin[2*NUM_PCS+1] = {0};
+    // string days[POSSIBILITIES];
+    // int daysAgregate[POSSIBILITIES];
+    map<string , string> days;
+    long long solnAgregate = 0;
     
     clock_t begin = clock();
     clock_t end = clock();
     unsigned int tempIndex = 0;
-    backtrack allPieces[8];
+    backtrack allPieces[NUM_PCS];
     puzzle_board calenderBoard;
     puzzle_piece tempPiece;
     unsigned int tempLocation;
@@ -144,28 +160,47 @@ int main (int argc, char * argv[])
     coord dimBuffer;
     string pieceBuffer[3];
     ofstream outFile;
-    outFile.open("output.txt",ofstream::out|ofstream::app);
+    
 
-
-    if(argc == 18)
+    if(argc == 2*NUM_PCS+2)
     {
-        for (unsigned int i = 0; i < 17; i++)
+        for (unsigned int i = 0; i < 2*NUM_PCS+1; i++)
         {
             argsin[i] = atol(argv[i+1]);
         }
         
     }
-
-    for (unsigned int i = 0; i < 12*31+1; i++)
+    else
     {
-        days[i] = "";
+        for (unsigned int i = 0; i < 2*NUM_PCS+1; i++)
+        {
+            argsin[i] = 0;
+        }
+        
     }
+    
+
+    // for (unsigned int i = 0; i < POSSIBILITIES; i++)
+    // {
+    //     days[i] = "";
+    //     daysAgregate[i] = 0;
+    // }
 
     dimBuffer.row = 2;
     dimBuffer.col = 3;
     pieceBuffer[0] =  "###";
     pieceBuffer[1] =  "###";
     tempPiece = puzzle_piece('O',pieceBuffer,dimBuffer,M_R_SYM);
+    tempPiece.set_currentOrientation(argsin[tempIndex*2]);
+    allPieces[tempIndex] = {argsin[tempIndex*2+1],tempPiece};
+    tempIndex++;
+ 
+    dimBuffer.row = 3;
+    dimBuffer.col = 3;
+    pieceBuffer[0] =  "###";
+    pieceBuffer[1] =  "## ";
+    pieceBuffer[2] =  "#  ";
+    tempPiece = puzzle_piece('M',pieceBuffer,dimBuffer,MIR_SYM);
     tempPiece.set_currentOrientation(argsin[tempIndex*2]);
     allPieces[tempIndex] = {argsin[tempIndex*2+1],tempPiece};
     tempIndex++;
@@ -185,16 +220,6 @@ int main (int argc, char * argv[])
     pieceBuffer[1] =  "#  ";
     pieceBuffer[2] =  "#  ";
     tempPiece = puzzle_piece('V',pieceBuffer,dimBuffer,MIR_SYM);
-    tempPiece.set_currentOrientation(argsin[tempIndex*2]);
-    allPieces[tempIndex] = {argsin[tempIndex*2+1],tempPiece};
-    tempIndex++;
-   
-    dimBuffer.row = 3;
-    dimBuffer.col = 3;
-    pieceBuffer[0] =  "## ";
-    pieceBuffer[1] =  " # ";
-    pieceBuffer[2] =  " ##";
-    tempPiece = puzzle_piece('Z',pieceBuffer,dimBuffer,ROT_SYM);
     tempPiece.set_currentOrientation(argsin[tempIndex*2]);
     allPieces[tempIndex] = {argsin[tempIndex*2+1],tempPiece};
     tempIndex++;
@@ -233,19 +258,29 @@ int main (int argc, char * argv[])
     tempPiece = puzzle_piece('L',pieceBuffer,dimBuffer,NO_SYM);
     tempPiece.set_currentOrientation(argsin[tempIndex*2]);
     allPieces[tempIndex] = {argsin[tempIndex*2+1],tempPiece};
+ 
+    dimBuffer.row = 3;
+    dimBuffer.col = 3;
+    pieceBuffer[0] =  "## ";
+    pieceBuffer[1] =  " # ";
+    pieceBuffer[2] =  " ##";
+    tempPiece = puzzle_piece('Z',pieceBuffer,dimBuffer,ROT_SYM);
+    tempPiece.set_currentOrientation(argsin[tempIndex*2]);
+    allPieces[tempIndex] = {argsin[tempIndex*2+1],tempPiece};
+    tempIndex++;
 
-    tempIndex = argsin[16];
+    tempIndex = argsin[2*NUM_PCS];
     for (int i = 0; i < tempIndex; i++)
     {
         calenderBoard.try_to_fit(allPieces[i].piece,loc_to_coord(allPieces[i].loc));
     }
     while(DEBUG || end-begin < MAX_TIME && !finished)
     {
-        //get Next piece to place
-        if(tempIndex > 7)   
+        
+        if(tempIndex > NUM_PCS-1)   
         {      //all pieces used on board
             unsigned int tempInd = date_to_index(decode_date(calenderBoard.board_to_string()));
-            if(tempInd == 12*31 || days[tempInd] == "")
+            if(days[tempInd] == "")
             {
                 days[tempInd]+=decode_date(calenderBoard.board_to_string());
             }
@@ -257,11 +292,11 @@ int main (int argc, char * argv[])
             // outFile<<calenderBoard.board_to_string()<<endl;
             //backtrack to latest piece can use
             calenderBoard.remove_shape(
-                          allPieces[7].piece,
-                          loc_to_coord(allPieces[7].loc));
-            allPieces[7].piece.reset_shape();
-            allPieces[7].loc = 0;
-            tempIndex = 6;
+                          allPieces[NUM_PCS-1].piece,
+                          loc_to_coord(allPieces[NUM_PCS-1].loc));
+            allPieces[NUM_PCS-1].piece.reset_shape();
+            allPieces[NUM_PCS-1].loc = 0;
+            tempIndex = NUM_PCS-2;
             tempFlag = false;
             
         }
@@ -306,17 +341,15 @@ int main (int argc, char * argv[])
 
 
     cout<<endl;
-    cout<<allPieces[0].piece.get_currentOrientation()<<' '<<allPieces[0].loc<<' ';
-    cout<<allPieces[1].piece.get_currentOrientation()<<' '<<allPieces[1].loc<<' ';
-    cout<<allPieces[2].piece.get_currentOrientation()<<' '<<allPieces[2].loc<<' ';
-    cout<<allPieces[3].piece.get_currentOrientation()<<' '<<allPieces[3].loc<<' ';
-    cout<<allPieces[4].piece.get_currentOrientation()<<' '<<allPieces[4].loc<<' ';
-    cout<<allPieces[5].piece.get_currentOrientation()<<' '<<allPieces[5].loc<<' ';
-    cout<<allPieces[6].piece.get_currentOrientation()<<' '<<allPieces[6].loc<<' ';
-    cout<<allPieces[7].piece.get_currentOrientation()<<' '<<allPieces[7].loc<<' ';
-    cout<<tempIndex<<endl;
+    for (int  i = 0; i < NUM_PCS; i++)
+    {
+        cout<<allPieces[i].piece.get_currentOrientation()<<' '<<allPieces[i].loc<<' ';
+    }
 
-    for (unsigned int i = 0; i < 12*31+1; i++)
+    cout<<tempIndex<<endl;
+    outFile.open("output.txt",ofstream::out|ofstream::app);
+
+    for (unsigned int i = 0; i < POSSIBILITIES; i++)
     {
         outFile<<days[i];
     }
@@ -416,43 +449,43 @@ coord puzzle_piece::transformed_point()
     switch(this->m_orientations[m_currentOrientation])
     {
         case NOR_0:
-        result.row = this->m_filled[this->m_currentFilled].row;
-        result.col = this->m_filled[this->m_currentFilled].col;
+        result.row = this->m_filled[this->m_filledCount-this->m_currentFilled-1].row;
+        result.col = this->m_filled[this->m_filledCount-this->m_currentFilled-1].col;
         break;
         
         case NOR_90:
-        result.row = this->m_filled[this->m_currentFilled].col;
-        result.col = this->m_dimensions.row-this->m_filled[this->m_currentFilled].row-1;
+        result.row = this->m_filled[this->m_filledCount-this->m_currentFilled-1].col;
+        result.col = this->m_dimensions.row-this->m_filled[this->m_filledCount-this->m_currentFilled-1].row-1;
         break;
 
         case NOR_180:
-        result.row = this->m_dimensions.row-this->m_filled[this->m_currentFilled].row-1;
-        result.col = this->m_dimensions.col-this->m_filled[this->m_currentFilled].col-1;
+        result.row = this->m_dimensions.row-this->m_filled[this->m_filledCount-this->m_currentFilled-1].row-1;
+        result.col = this->m_dimensions.col-this->m_filled[this->m_filledCount-this->m_currentFilled-1].col-1;
         break;
         
         case NOR_270:
-        result.row = this->m_dimensions.col-this->m_filled[this->m_currentFilled].col-1;
-        result.col = this->m_filled[this->m_currentFilled].row;
+        result.row = this->m_dimensions.col-this->m_filled[this->m_filledCount-this->m_currentFilled-1].col-1;
+        result.col = this->m_filled[this->m_filledCount-this->m_currentFilled-1].row;
         break;
 
         case MIR_0 :
-        result.row = this->m_filled[this->m_currentFilled].row;
-        result.col = this->m_dimensions.col-this->m_filled[this->m_currentFilled].col-1;
+        result.row = this->m_filled[this->m_filledCount-this->m_currentFilled-1].row;
+        result.col = this->m_dimensions.col-this->m_filled[this->m_filledCount-this->m_currentFilled-1].col-1;
         break;
         
         case MIR_90 :
-        result.row = this->m_dimensions.col-this->m_filled[this->m_currentFilled].col-1;
-        result.col = this->m_dimensions.row-this->m_filled[this->m_currentFilled].row-1;
+        result.row = this->m_dimensions.col-this->m_filled[this->m_filledCount-this->m_currentFilled-1].col-1;
+        result.col = this->m_dimensions.row-this->m_filled[this->m_filledCount-this->m_currentFilled-1].row-1;
         break;
 
         case MIR_180 :
-        result.row = this->m_dimensions.row-this->m_filled[this->m_currentFilled].row-1;
-        result.col = this->m_filled[this->m_currentFilled].col;
+        result.row = this->m_dimensions.row-this->m_filled[this->m_filledCount-this->m_currentFilled-1].row-1;
+        result.col = this->m_filled[this->m_filledCount-this->m_currentFilled-1].col;
         break;
 
         case MIR_270 :
-        result.row = this->m_filled[this->m_currentFilled].col;
-        result.col = this->m_filled[this->m_currentFilled].row;
+        result.row = this->m_filled[this->m_filledCount-this->m_currentFilled-1].col;
+        result.col = this->m_filled[this->m_filledCount-this->m_currentFilled-1].row;
         break;
     }
     return result;
@@ -468,6 +501,11 @@ bool puzzle_piece::get_next_coord(coord &outCoord)
         result = true;
     }
     return result;
+}
+
+unsigned int puzzle_piece::get_cells_number()
+{
+    return this->m_filledCount;
 }
 
 coord puzzle_piece::get_dimensions()
@@ -516,11 +554,18 @@ bool puzzle_board::try_to_fit(puzzle_piece pieceToFit , coord pieceLocation)
     coord parts[6];
     unsigned int i = 0;
     bool canFit = true;
+    coord checKfit = pieceToFit.get_dimensions();
+    checKfit.col+=pieceLocation.col;
+    checKfit.row+=pieceLocation.row;
+    if(checKfit.col > CAL_COL || checKfit.row > CAL_ROW)
+    {
+        canFit = false;
+    }
     while(canFit && pieceToFit.get_next_coord(parts[i]))
     {
         parts[i].row+= pieceLocation.row;
         parts[i].col+= pieceLocation.col;
-        if( parts[i].row > 6 || parts[i].col > 6 || this->m_board[parts[i].row][parts[i].col]!='.')
+        if( parts[i].row > CAL_ROW-1 || parts[i].col > CAL_COL-1 || this->m_board[parts[i].row][parts[i].col]!='.')
         {
             canFit=false;
         }
@@ -547,7 +592,7 @@ void puzzle_board::remove_shape(puzzle_piece pieceToRem , coord pieceLocation)
     {
         tempCoord.row+= pieceLocation.row;
         tempCoord.col+= pieceLocation.col;
-        if( tempCoord.row < 7 && tempCoord.col < 7 && pieceName == this->m_board[tempCoord.row][tempCoord.col])
+        if( tempCoord.row < CAL_ROW && tempCoord.col < CAL_COL && pieceName == this->m_board[tempCoord.row][tempCoord.col])
         {
            this->m_board[tempCoord.row][tempCoord.col] ='.';
         }
@@ -556,19 +601,24 @@ void puzzle_board::remove_shape(puzzle_piece pieceToRem , coord pieceLocation)
 
 void puzzle_board::reset_board()
 {
-    this->m_board[0] = "...... ";
-    this->m_board[1] = "...... ";
-    this->m_board[2] = ".......";
-    this->m_board[3] = ".......";
-    this->m_board[4] = ".......";
-    this->m_board[5] = ".......";
-    this->m_board[6] = "...    ";
+    for (int i = 0; i < CAL_ROW; i++)
+    {
+        this->m_board[i] = boardConfig[i];
+    }
+}
+
+void puzzle_board::board_to_array(std::string outBoard[])
+{
+    for (int i = 0; i < CAL_ROW; i++)
+    {
+        outBoard[i]=this->m_board[i];
+    }
 }
 
 std::string puzzle_board::board_to_string()
 {
     std::string result = "";
-    for (int i = 0; i < 7; i++)
+    for (int i = 0; i < CAL_ROW; i++)
     {
         result+=this->m_board[i]+"\n";
     }
@@ -577,10 +627,42 @@ std::string puzzle_board::board_to_string()
 
 inline unsigned int coord_to_loc(coord in)
 {
-    return in.row*7+in.col;
+    return in.row*CAL_COL+in.col;
 }
 
 inline coord loc_to_coord(unsigned int in)
 {
-    return {in/7,in%7};
+    return {in/CAL_COL,in%CAL_COL};
+}
+
+bool is_branch_viable( puzzle_board currentState , backtrack piecesArr[] , unsigned int indexPiece )
+{
+    bool result = true;
+    std::string currentBoard[CAL_ROW];
+    currentState.board_to_array(currentBoard);
+    const unsigned int spacesMaxSize = NUM_PCS+3;
+    unsigned int pool [spacesMaxSize] = {0};
+    unsigned int poolSize = 3;
+    unsigned int spaces[spacesMaxSize] = {0};
+    unsigned int spacesSize = 0;
+    for (unsigned int i = 0; i < 3; i++)
+    {
+        pool[i] = 1;
+    }
+    for (unsigned int  i = indexPiece+1; i < NUM_PCS; i++)
+    {
+        pool[poolSize] = piecesArr[i].piece.get_cells_number();
+        poolSize++;
+    }
+    std::sort(pool,pool+poolSize);
+    
+    
+
+
+    /* get*/
+
+
+
+
+
 }
