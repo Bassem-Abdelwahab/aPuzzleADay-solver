@@ -7,17 +7,14 @@
 #include <time.h>
 #include <stdlib.h>
 
-#define CAL_SIZE 59
-
-std::string decodedDate[CAL_SIZE] = {"Jan","Feb","Mar","Apr","May","Jun", " ","\n",
-                                     "Jul","Aug","Sep","Oct","Nov","Dec", " ","\n",
-                                     "Sun","Mon","Tue","Wed","Thu","Fri","Sat","\n",
-                                      "01", "02", "03", "04", "05", "06","07","\n",
-                                      "08", "09", "10", "11", "12", "13","14","\n",
-                                      "15", "16", "17", "18", "19", "20","21","\n",
-                                      "22", "23", "24", "25", "26", "27","28","\n",
-                                      "29", "30", "31"};
-#define MAX_LOCATION 45
+std::string decodedDate[51] = {"Jan","Feb","Mar","Apr","May","Jun", " ","\n",
+                               "Jul","Aug","Sep","Oct","Nov","Dec", " ","\n",
+                                "01", "02", "03", "04", "05", "06","07","\n",
+                                "08", "09", "10", "11", "12", "13","14","\n",
+                                "15", "16", "17", "18", "19", "20","21","\n",
+                                "22", "23", "24", "25", "26", "27","28","\n",
+                                "29", "30", "31"};
+#define MAX_LOCATION 38
 #define DEBUG   0
 enum orientation_t {NOR_0=0 , NOR_90=1 , NOR_180=2 , NOR_270=3 , 
                     MIR_0=4 , MIR_90=5 , MIR_180=6 , MIR_270=7};
@@ -69,11 +66,6 @@ std::string decode_date(std::string boardRep)
         if(loc != std::string::npos)
         {
             date+=decodedDate[loc];
-            loc = boardRep.rfind('.',loc-1);
-            if(loc != std::string::npos)
-            {
-                date+=decodedDate[loc];
-            }
         }
     }
     return date;
@@ -86,14 +78,14 @@ unsigned int date_to_index(std::string input)
     unsigned int day = 0;
     if(input.length() == 6)
     {
-        ptrfound = std::find(decodedDate,decodedDate+CAL_SIZE,input.substr(3,3));
+        ptrfound = std::find(decodedDate,decodedDate+51,input.substr(3,3));
         if(ptrfound < decodedDate+18)
         {
             month = ptrfound-decodedDate;
             month = ((month/8)*6) + (month%8);
         }
-        ptrfound = std::find(decodedDate,decodedDate+CAL_SIZE,input.substr(0,2));
-        if(ptrfound < decodedDate+CAL_SIZE)
+        ptrfound = std::find(decodedDate,decodedDate+51,input.substr(0,2));
+        if(ptrfound < decodedDate+51)
         {
             day = ptrfound-decodedDate;
             day = (((day/8)-2)*7) + (day%8);
