@@ -11,3 +11,5 @@
 /puzzleRepresentation.exe
 /solutions_DB.h
 /test.txt
+*.out
+*.gch
